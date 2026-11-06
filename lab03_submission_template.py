@@ -81,9 +81,83 @@ def lu_factorisation(A):
     L, U = np.zeros_like(A, dtype=float), np.zeros_like(A, dtype=float)
 
     # TODO: fill in L and U
+    for i in range(n):
+        L[i, i] = 1.0
+
+        for j in range(i,n):
+
+            sum = 0.0
+            for k in range(i):
+                sum += L[i, k] * U[k, j]
+
+            U[i, j] = A[i, j] - sum
+
+        for j in range(i + 1, n):
+            if U[i, i] == 0:
+                raise ValueError("zero pivot")
+            
+            sum = 0.0
+            for k in range(i):
+                sum += L[j, k] * U[k, i]
+            
+            L[j, i] = (A[j, i] - sum) / U[i, i]
+
 
     return L, U
 
+def lu_factorisation_with_pivot(A):
+    n, m = A.shape
+    if n != m:
+        raise ValueError(f"Matrix A is not square {A.shape=}")
+
+    A1 = A.astype(float).copy()
+    L = np.zeros((n, n), dtype=float)
+    U = np.zeros((n, n), dtype=float)
+    
+    row_order = list(range(n))
+
+    for i in range(n):
+        L[i, i] = 1.0
+
+        pivot_row = i
+        max_val = -1.0
+        for r in range(i, n):
+            s = 0.0
+            for l in range(i):
+                s += L[r, l] * U[l, i]
+            val = abs(A1[r, i] - s)
+            if val > max_val:
+                max_val = val
+                pivot_row = r
+
+        if pivot_row != i:
+            row_order[i], row_order[pivot_row] = row_order[pivot_row], row_order[i]
+            A1[[i, pivot_row], :] = A1[[pivot_row, i], :]
+            if i > 0:
+                L[[i, pivot_row], :i] = L[[pivot_row, i], :i]
+
+        for j in range(i,n):
+
+            sum = 0.0
+            for k in range(i):
+                sum += L[i, k] * U[k, j]
+
+            U[i, j] = A1[i, j] - sum
+
+
+        for j in range(i + 1, n):
+            if U[i, i] == 0:
+                raise ValueError("zero pivot")
+            
+            sum = 0.0
+            for k in range(i):
+                sum += L[j, k] * U[k, i]
+            
+            L[j, i] = (A1[j, i] - sum) / U[i, i]
+
+    P = np.eye(n, dtype=float)[row_order]
+
+    return P, L, U  
 
 def determinant(A):
     n = A.shape[0]
@@ -177,6 +251,10 @@ def gaussian_elimination(A, b):
 
 
 def runtime_comparison():
+
+    import time as t
+    import matplotlib.pyplot as plt
+
     """
     Time lu_factorisation against gaussian_elimination across a range of
     matrix sizes, produce a log-log plot comparing the two, and save it
@@ -190,8 +268,64 @@ def runtime_comparison():
     # ...
     # plt.savefig("plot.png")
 
+    testsizes = [5, 10 , 20, 50, 100]
+    factor_times = []
+    elim_time = []
+
+    for n in testsizes:
+        A, b, unused = generate_safe_system(n)
+        starttime = t.perf_counter()
+        lu_factorisation(A)
+        endtime =  t.perf_counter()
+        factor_times.append(endtime - starttime) 
+
+        CopyA, Copyb = A.copy(), b.copy()
+        starttime = t.perf_counter()
+        gaussian_elimination(CopyA,Copyb)
+        endtime = t.perf_counter()
+        elim_time.append(endtime - starttime) 
+
+    plt.figure()
+    plt.loglog(testsizes, factor_times, label = "LU Factorisation" )
+    plt.loglog(testsizes, elim_time, label = "Gaussian Elimination" )
+    plt.legend()
+    plt.savefig("plot.png")
+    plt.close()
+
+
+def exercise2():
+    epsilon = 1e-15
+    A = np.array([[-10, -7, 0], [-3, 2.1 - epsilon, 6], [5, -1, 5]], dtype=float)
+
+    b = np.array([[7], [9.9 + epsilon], [11]], dtype=float)
+
+    P, L, U = lu_factorisation_with_pivot(A)
+
+    Pb = P @ b
+    n = A.shape[0]
+    
+    y = np.zeros_like(Pb)
+    for i in range(n):
+        s = 0.0
+        for j in range(i):
+            s += L[i, j] * y[j, 0]
+        y[i, 0] = (Pb[i, 0] - s) / L[i, i]
+        
+    x = np.zeros_like(y)
+    for i in range(n - 1, -1, -1):
+        s = 0.0
+        for j in range(i + 1, n):
+            s += U[i, j] * x[j, 0]
+        x[i, 0] = (y[i, 0] - s) / U[i, i]
+
+    print("P:",P)
+    print("L:",L)
+    print("U:",U)
+    print("Solution:",x)
 
 if __name__ == "__main__":
     A_large, b_large, x_large = generate_safe_system(100)
     print(determinant(A_large))
     runtime_comparison()
+
+    exercise2()
